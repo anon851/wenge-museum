@@ -1,0 +1,4 @@
+# Cloudflare Pages 在独立的项目中部署展馆。留言服务可通过该项目的绑定单独启用。
+name = "historical-memory-museum"
+pages_build_output_dir = "dist"
+compatibility_date = "2025-09-01"

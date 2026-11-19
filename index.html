@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文革博物馆 · 3D 虚拟馆</title>
+<meta name="chat-endpoint" content=""><!-- 留言服务地址；留空用本站 /api/ws（Cloudflare Pages Function） -->
+<meta name="description" content="一座构想中的博物馆：把天安门广场上的毛主席纪念堂改建为文革博物馆。可步行参观的三层 3D 展馆，记录 1921 至 2022 年中国的政治暴力及其受难者。">
+<style>/* 先内嵌开场与进度条的样式：样式表还没下载完，进度条也能立刻显示 */
+html,body{margin:0;height:100%;overflow:hidden;background:#0c0c0d;color:#e8e2d2}
+#intro{position:fixed;inset:0;display:grid;place-items:center;padding:24px;overflow:auto}
+@media (max-width:600px),(max-height:720px){#intro>.intro-box{align-self:start}}   /* 小屏上从顶部排起，不被居中裁掉 */
+.intro-box{max-width:640px;text-align:center}
+#loader{margin:1.6em 0 1.2em}#loader .bar{height:6px;background:rgba(255,255,255,.12);border-radius:3px;overflow:hidden;max-width:420px;margin:0 auto}
+#loader .bar i{display:block;height:100%;width:0;background:#b0402f;transition:width .25s}#loader p{margin:.6em 0 0;font-size:.9em;color:#a39d90}
+</style>
+<link rel="preload" href="assets/font/serif-400.woff2" as="fetch" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/font/serif-700.woff2" as="fetch" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/style.css">
+<script src="github-link.js" defer></script><!-- 开场页的 GitHub 链接：地址填在 github-link.js 里，留空则不显示 -->
+<script type="importmap">{ "imports": { "three": "./js/vendor/three.module.js", "three/addons/": "./js/vendor/addons/" } }</script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="lightbox" hidden title="点击关闭"><img alt=""></div>
+
+<div id="hud" hidden>
+  <div id="hall-label"><span id="hall-no"></span><span id="hall-title"></span><small id="hall-sub"></small></div>
+  <button id="menu-btn" type="button">导览</button>
+  <button id="chat-btn" type="button" aria-label="留言" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9.5L5.5 19v-3.5H4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span id="chat-peek"></span></button>
+  <div id="visitors" hidden></div>
+  <div id="crosshair"></div>
+  <div id="hint"></div>
+  <div id="help">W A S D / 方向键 移动 · 鼠标转动视角 · Shift 加速 · 点击展品阅读 · 空格关闭阅读 · M 导览 · T 留言 · Esc 释放鼠标</div>
+  <div id="stick"><div id="stick-knob"></div></div>
+</div>
+
+<section id="intro">
+  <div class="intro-box">
+    <p class="kicker">一座构想中的博物馆</p>
+    <h1>文革博物馆</h1>
+    <p class="sub">天安门广场 · 原毛主席纪念堂 · 1921—2022</p>
+    <div id="intro-entry">
+    <div id="loader"><div class="bar"><i id="load-bar"></i></div><p id="load-msg">正在下载展馆数据…</p></div>
+    <div id="load-recover" hidden><p>上次进入 3D 展馆没有成功（手机内存可能不够）。这次会用省内存的设置载入，画面会稍粗一些。</p><button id="load-recover-go" type="button">进入 3D 展馆</button><a href="guide.html" class="guide-link">先读文字导览</a></div>
+    <div id="load-fail" hidden><p id="load-fail-msg"></p><button id="load-retry" type="button">重试</button><a href="guide.html" class="guide-link">打开文字导览</a></div>
+    <button id="enter-btn" type="button" hidden>步入展馆</button>
+    </div>
+    <p class="lead">“建立‘文革’博物馆，这不是某一个人的事情，我们谁都有责任让子子孙孙、世世代代牢记十年惨痛的教训。”<span>—— 巴金，1986</span></p>
+    <p class="desc">三层二十四个展厅，单向参观：从苏区肃反、土改、反右、大饥荒、文化大革命，到一九八九与 2022 年的封城。</p>
+
+    <p class="keys"><span class="k-desk">W A S D 移动，鼠标转向，点击展板阅读，M 打开导览</span><span class="k-touch">左下摇杆移动，滑动屏幕转向，轻点展板阅读</span></p>
+    <p id="intro-github" hidden><a class="guide-link" target="_blank" rel="noopener noreferrer"></a></p>
+  </div>
+</section>
+
+<aside id="menu" hidden role="dialog" aria-modal="true" aria-labelledby="menu-title" tabindex="-1">
+  <header><h2 id="menu-title">导览</h2><button class="close" type="button" data-close="menu" aria-label="关闭">×</button></header>
+  <div id="menu-body"></div>
+</aside>
+
+<article id="reader" hidden role="dialog" aria-modal="true" aria-labelledby="r-title">
+  <div class="reader-box" tabindex="-1">
+    <button class="close" type="button" data-close="reader" aria-label="关闭">×</button>
+    <p id="r-hall"></p>
+    <h2 id="r-title"></h2>
+    <p id="r-date"></p>
+    <div id="r-body"></div>
+        <nav><button id="r-prev" type="button">← 上一块</button><button id="r-next" type="button">下一块 →</button></nav>
+  </div>
+</article>
+
+
+<aside id="chat" hidden aria-label="留言">
+  <button id="chat-close" class="close" type="button" aria-label="关闭">×</button>
+  <label id="chat-me">我的名字<input id="chat-name" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="访客"></label>
+  <ul id="chat-list"></ul>
+  <p id="chat-status" hidden></p>
+  <form id="chat-form" autocomplete="off"><input id="chat-input" type="text" maxlength="200" placeholder="说点什么" enterkeyhint="send"><button id="chat-send" type="submit">发送</button></form>
+</aside>
+
+
+<div id="fade"></div>
+<noscript>本页面需要启用 JavaScript 与 WebGL。</noscript>
+<script>
+// 进馆失败的兜底：浏览器不支持 WebGL、主程序下载或启动失败、长时间没有进展时，显示原因、重试按钮和文字导览（不依赖 WebGL）
+(function () {
+  var failed = false, last = Date.now(), done = false;
+  window.__loadFail = function (why) {
+    if (failed || done) return; failed = true;
+    var box = document.getElementById('load-fail'); document.getElementById('load-fail-msg').textContent = why;
+    box.hidden = false; document.getElementById('loader').hidden = true;
+  };
+  window.__loadReady = function () { done = true; setTimeout(window.__bootOk, 15000); };
+  // 防崩溃循环：iOS 等内存紧的设备，页面占内存过多会被系统结束并自动重载。每次开始加载记一笔，正常运行 15 秒后清掉；
+  // 如果打开时这一笔还在，说明上次没能完成：改用省内存设置（window.__safeMode），并等参观者点一下再载入 3D，不自动重来。
+  var BOOT = 'museum-boot', prev = 0;
+  try { prev = +(localStorage.getItem(BOOT) || 0); localStorage.setItem(BOOT, String(prev + 1)); } catch (e) {}
+  window.__safeMode = Math.min(2, prev);
+  window.__bootOk = function () { try { localStorage.removeItem(BOOT); } catch (e) {} };
+  // 参观者自己关掉或刷新页面（会触发 pagehide）不算崩溃；系统因内存不足结束页面时不会触发它
+  window.addEventListener('pagehide', window.__bootOk);
+  if (prev > 0) {
+    var rec = document.getElementById('load-recover'), ld = document.getElementById('loader');
+    rec.hidden = false; ld.hidden = true;
+    window.__bootGate = new Promise(function (res) { document.getElementById('load-recover-go').onclick = function () { rec.hidden = true; ld.hidden = false; last = Date.now(); res(); }; });
+  }
+  window.__loadAlive = function () { last = Date.now(); };
+  document.getElementById('load-retry').onclick = function () { location.reload(); };
+  try { var c = document.createElement('canvas'); if (!(c.getContext('webgl2') || c.getContext('webgl'))) window.__loadFail('这个浏览器无法启用 WebGL，三维展馆打不开。可以改用文字导览，或换用新版 Chrome、Edge、Safari、Firefox。'); } catch (e) {}
+  window.addEventListener('error', function (e) { if (!done && e.filename && /\/js\//.test(e.filename)) window.__loadFail('展馆程序启动时出错（' + (e.message || '未知错误') + '）。请重试，或先读文字导览。'); });
+  setInterval(function () { if (!done && !failed && !window.__bootWaiting && Date.now() - last > 90000) window.__loadFail('加载一分半钟没有进展，可能是网络中断。请重试，或先读文字导览。'); }, 5000);
+})();
+</script>
+<script>
+// 加载进度：先按已下载的脚本文件计数（约占六成），其余由 main.js 在建造展厅时报告
+(function () {
+  var bar = document.getElementById('load-bar'), msg = document.getElementById('load-msg'), shown = 0, TOTAL = 29, n = 0;
+  window.__loadProgress = function (p, text) { window.__loadAlive && window.__loadAlive(); if (p > shown) { shown = p; bar.style.width = p + '%'; } if (text) msg.textContent = text; };
+  try {
+    new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { if (/\.js(\?|$)/.test(e.name)) { n++; window.__loadProgress(Math.min(60, 4 + n / TOTAL * 56), '正在下载展馆数据… ' + Math.min(n, TOTAL) + ' / ' + TOTAL); } }); }).observe({ type: 'resource', buffered: true });
+  } catch (e) {}
+  window.__loadProgress(3);
+})();
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

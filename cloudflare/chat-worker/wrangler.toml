@@ -1,0 +1,17 @@
+# 到馆人数与匿名留言：Worker + Durable Object（部署说明见 cloudflare/DEPLOY.md）
+name = "museum-chat"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "Lobby"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Lobby"]
+
+[vars]
+# 填写新 Pages 站点的完整来源（逗号分隔）。留空时留言服务停用。
+ALLOWED_ORIGINS = ""
+# SALT（给 IP 做哈希的密钥）不要写在这里，用 `npx wrangler secret put SALT` 设置

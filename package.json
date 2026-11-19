@@ -1,0 +1,13 @@
+{
+  "name": "museum",
+  "private": true,
+  "type": "module",
+  "description": "文革博物馆 3D 虚拟馆。开发时直接用静态服务器打开；发布前运行 npm run build（tools/pack.py）生成 dist/。",
+  "scripts": {
+    "build": "python3 tools/pack.py",
+    "check:release": "node tools/check-release-identity.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  }
+}
